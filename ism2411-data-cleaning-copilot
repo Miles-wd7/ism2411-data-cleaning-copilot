@@ -1,0 +1,10 @@
+ism2411-data-cleaning-copilot/
+├── data/
+│   ├── raw/
+│   │   └── sales_data_raw.csv
+│   └── processed/
+│       └── sales_data_clean.csv        # created by your script
+├── src/
+│   └── data_cleaning.py                # your main script
+├── README.md                           # short project description
+└── reflection.md                       # your written explanation
