@@ -173,19 +173,15 @@ def main():
     cleaned_path = os.path.join(repo_root, "data", "processed", "sales_data_clean.csv")
 
     print("Using raw_path:", raw_path)
-    if not os.path.exists(raw_path):
-        raise FileNotFoundError(
-            f"Raw data not found at {raw_path}. Make sure the file exists and you run the script from the repository."
-        )
+    
+        if __name__ == "__main__":
+        raw_path = "data/raw/sales_data_raw.csv"
+        cleaned_path = "data/processed/sales_data_clean.csv"
 
-    df_raw = load_data(raw_path)
-    df_clean = clean_column_names(df_raw)
-    df_clean = strip_whitespace(df_clean)
-    df_clean = handle_missing_values(df_clean)
-    df_clean = remove_invalid_rows(df_clean)
-
-    os.makedirs(os.path.dirname(cleaned_path), exist_ok=True)
-    df_clean.to_csv(cleaned_path, index=False)
-
-    print("Cleaning complete. First few rows:")
-    print(df_clean.head())
+        df_raw = load_data(raw_path)
+        df_clean = clean_column_names(df_raw)
+        df_clean = handle_missing_values(df_clean)
+        df_clean = remove_invalid_rows(df_clean)
+        df_clean.to_csv(cleaned_path, index=False)
+        print("Cleaning complete. First few rows:")
+        print(df_clean.head())
