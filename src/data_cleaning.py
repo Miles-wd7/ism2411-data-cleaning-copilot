@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 
-
 def load_data(file_path: str) -> pd.DataFrame:
     """
     Load the raw sales CSV file into a pandas DataFrame.
@@ -12,7 +11,6 @@ def load_data(file_path: str) -> pd.DataFrame:
         raise FileNotFoundError(f"Could not find raw data file: {file_path}")
     df = pd.read_csv(file_path)
     return df
-
 
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -31,7 +29,6 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
-
 def strip_whitespace(df: pd.DataFrame) -> pd.DataFrame:
     """
     Strip leading/trailing whitespace from common text columns if they exist.
@@ -42,23 +39,73 @@ def strip_whitespace(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].astype("string").str.strip()
     return df
 
-
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Convert 'price' and 'qty' to numeric (coerce errors) and drop rows missing
-    price, qty, or date_sold if those columns exist.
+    Handle missing and invalid values with a sensible default strategy:
+
+    - Convert 'price' and 'qty' to numeric (coerce errors -> NaN).
+    - Convert 'date_sold' to datetime (coerce errors -> NaT).
+    - Drop columns with more than 50% missing values.
+    - For numeric columns: fill missing with the column median.
+    - For categorical (object/string) columns: fill missing with the mode when available, otherwise 'Unknown'.
+    - For boolean columns: fill missing with False.
+    - After imputation, drop any remaining rows missing any of the required columns ('price', 'qty', 'date_sold') if those columns exist.
+
+    This function returns a cleaned copy of the DataFrame.
     """
     df = df.copy()
+
+    # Coerce common columns to proper dtypes
     if "price" in df.columns:
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
     if "qty" in df.columns:
         df["qty"] = pd.to_numeric(df["qty"], errors="coerce")
+    if "date_sold" in df.columns:
+        df["date_sold"] = pd.to_datetime(df["date_sold"], errors="coerce")
 
+    # Drop columns with a high missing rate (>50%)
+    thresh = 0.5
+    missing_frac = df.isna().mean()
+    cols_to_drop = missing_frac[missing_frac > thresh].index.tolist()
+    if cols_to_drop:
+        df = df.drop(columns=cols_to_drop)
+
+    # Impute numeric columns with median
+    num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+    for col in num_cols:
+        median = df[col].median()
+        if pd.isna(median):
+            # If entire column is NaN (median NaN), fill with 0
+            df[col] = df[col].fillna(0)
+        else:
+            df[col] = df[col].fillna(median)
+
+    # Impute boolean columns
+    bool_cols = df.select_dtypes(include=["bool"]).columns.tolist()
+    for col in bool_cols:
+        df[col] = df[col].fillna(False)
+
+    # Impute object/string columns with mode or 'Unknown'
+    obj_cols = df.select_dtypes(include=["object", "string"]).columns.tolist()
+    for col in obj_cols:
+        if df[col].isna().all():
+            df[col] = df[col].fillna("Unknown")
+            continue
+        try:
+            mode = df[col].mode(dropna=True)
+            if not mode.empty:
+                df[col] = df[col].fillna(mode.iloc[0])
+            else:
+                df[col] = df[col].fillna("Unknown")
+        except Exception:
+            df[col] = df[col].fillna("Unknown")
+
+    # Finally, ensure required columns do not contain missing values; drop rows if they do
     required = [c for c in ("price", "qty", "date_sold") if c in df.columns]
     if required:
         df = df.dropna(subset=required)
-    return df
 
+    return df
 
 def remove_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -71,7 +118,6 @@ def remove_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     if "qty" in df.columns:
         df = df[df["qty"] >= 0]
     return df
-
 
 def main():
     # Build paths relative to the repository root (parent of src/)
