@@ -109,14 +109,60 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
 
 def remove_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Remove rows with negative price or negative quantity.
-    Keep rows with price >= 0 and qty >= 0 (change to > 0 if you prefer).
+    Remove rows with invalid or implausible numeric values and duplicates.
+
+    Steps performed:
+    - Coerce 'price' and 'qty' to numeric (errors -> NaN).
+    - Drop rows with NaN in required numeric columns (price, qty) if they exist.
+    - Remove rows with negative price or negative quantity (price < 0 or qty < 0).
+    - Remove rows with implausibly large values (safeguard thresholds applied).
+    - Convert 'qty' to integer nullable dtype when values are whole numbers.
+    - Drop exact duplicate rows.
+
+    The thresholds used for implausible values are conservative defaults and can be adjusted
+    later if you want different behavior.
     """
     df = df.copy()
+
+    # Coerce to numeric for checks
+    if "price" in df.columns:
+        df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    if "qty" in df.columns:
+        df["qty"] = pd.to_numeric(df["qty"], errors="coerce")
+
+    # Drop rows where required numeric columns are missing
+    required_numeric = [c for c in ("price", "qty") if c in df.columns]
+    if required_numeric:
+        df = df.dropna(subset=required_numeric)
+
+    # Remove negative values
     if "price" in df.columns:
         df = df[df["price"] >= 0]
     if "qty" in df.columns:
         df = df[df["qty"] >= 0]
+
+    # Remove implausibly large values (safeguards)
+    # These thresholds are intentionally high to avoid dropping valid outliers in normal datasets
+    if "price" in df.columns:
+        max_price = 1e7  # $10 million
+        df = df[df["price"] <= max_price]
+    if "qty" in df.columns:
+        max_qty = 1e6  # 1 million units
+        df = df[df["qty"] <= max_qty]
+
+    # If qty values are all whole numbers, convert to nullable integer dtype
+    if "qty" in df.columns and not df["qty"].empty:
+        try:
+            # Check for whole numbers (allowing for float dtype)
+            if (df["qty"].dropna() % 1 == 0).all():
+                df["qty"] = df["qty"].astype("Int64")
+        except Exception:
+            # If modulo operation fails for some reason, skip conversion
+            pass
+
+    # Drop exact duplicate rows
+    df = df.drop_duplicates()
+
     return df
 
 def main():
